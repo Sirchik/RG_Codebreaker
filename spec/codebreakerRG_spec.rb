@@ -37,7 +37,7 @@ module CodebreakerRG
       end
 
       it 'set settings' do
-        expect(game.instance_variable_get(:@user_settings)).to eq settings
+        expect(game.instance_variable_get(:@settings)).to eq :medium
       end
 
       it 'set attempts' do
@@ -93,6 +93,7 @@ module CodebreakerRG
                         '1121' => [2,2], '5234' => [0,1]} }.each do |sec_code, tests|
         context "secret code is #{sec_code}" do
           before do
+            game.instance_variable_set(:@statistics, [{submits: []}])
             game.instance_variable_set(:@state, :playing)
             game.instance_variable_set(:@secret_code, sec_code)
             game.instance_variable_set(:@code_length, 4)
@@ -159,6 +160,14 @@ module CodebreakerRG
       let(:settings) { Game::DIFF_SETTINGS[:medium] }
 
       it 'used start game' do
+        game.instance_variable_set(:@settings, :medium)
+        game.instance_variable_set(:@state, :playing)
+        expect(game).to receive(:start).with({:diff_level=>:medium})
+        game.play_again
+      end
+
+      it 'used start game' do
+        game.instance_variable_set(:@settings, :user_settings)
         game.instance_variable_set(:@user_settings, settings)
         game.instance_variable_set(:@state, :playing)
         expect(game).to receive(:start).with({:user_settings=>settings})
@@ -167,6 +176,7 @@ module CodebreakerRG
 
       [:playing, :won, :lost].each do |state|
         it "got no expection with #{state}" do
+          game.instance_variable_set(:@settings, :medium)
           game.instance_variable_set(:@state, state)
           game.instance_variable_set(:@user_settings, settings)
           expect{game.play_again}.not_to raise_error
@@ -176,12 +186,13 @@ module CodebreakerRG
       it "got expection with initialized" do
         game.instance_variable_set(:@state, :initialized)
         # game.instance_variable_set(:@user_settings, settings)
-        expect{game.play_again}.to raise_error RuntimeError, 'game not started'
+        expect{game.play_again}.to raise_error RuntimeError, 'game not started yet'
       end
     end
 
     context '#hint' do
       before do
+        game.instance_variable_set(:@statistics, [{submits: []}])
         game.instance_variable_set(:@state, :playing)
         game.instance_variable_set(:@secret_code, '1234')
         game.instance_variable_set(:@hints_left, 1)
@@ -205,30 +216,48 @@ module CodebreakerRG
       end
     end
 
-    context '#statistic' do
+    context '#statistics' do
+      before do
+        settings = Game::DIFF_SETTINGS[:medium]
+        @statistics_hash = {
+                    attempts_left: settings[:attempts],
+                    settings: :medium,
+                    user_settings: {},
+                    hints_left: settings[:hints],
+                    hint: '',
+                    secret_code: '1234',
+                    submits: []
+                  }
+      end
       [:playing, :won, :lost].each do |state|
         it "got statistic with #{state}" do
-          game.instance_variable_set(:@code_length, 4)
+          state_hash = {state: state}
+          temp_hash = @statistics_hash.merge state_hash
           game.instance_variable_set(:@state, state)
-          expect(game.statistic).not_to be_empty
+          game.instance_variable_set(:@statistics, [temp_hash])
+          expect(game.statistics).not_to be_empty
         end
       end
       it 'empty statistic with initialized' do
-        game.instance_variable_set(:@state, :initialized)
-        expect(game.statistic).to eq({state: 'game not started yet'})
+        state_hash = {state: :initialized}
+        temp_hash = @statistics_hash.merge state_hash
+        game.instance_variable_set(:@statistics, [temp_hash])
+        expect(game.statistics).to eq({state: 'game not started yet'})
       end
       it "got secret code in statistic with playing" do
-        game.instance_variable_set(:@code_length, 4)
-        game.instance_variable_set(:@secret_code, '1234')
+        state_hash = {state: :playing}
+        temp_hash = @statistics_hash.merge state_hash
+        game.instance_variable_set(:@statistics, [temp_hash])
         game.instance_variable_set(:@state, :playing)
-        expect(game.statistic[:secret_code]).to eq '****'
+        expect(game.statistics.last[:secret_code]).to eq '****'
       end
       [:won, :lost].each do |state|
         it "got statistic with #{state}" do
-          game.instance_variable_set(:@code_length, 4)
-          game.instance_variable_set(:@secret_code, '1234')
+          state_hash = {state: state}
+          temp_hash = @statistics_hash.merge state_hash
+          game.instance_variable_set(:@statistics, [temp_hash])
           game.instance_variable_set(:@state, state)
-          expect(game.statistic[:secret_code]).to eq '1234'
+          expect(game.statistics.last[:secret_code]).to eq '1234'
         end
       end
 

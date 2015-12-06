@@ -6,22 +6,28 @@ module CodebreakerRG
 
     def initialize
       @state = :initialized
+      @statistics = []
     end
 
     def start diff_level: :medium, user_settings: {}
       if user_settings.empty?
         settings = DIFF_SETTINGS[diff_level]
+        @settings = diff_level
+        @user_settings = {}
       else
         settings = user_settings
+        @settings = :user_settings
+        @user_settings = settings
       end
-      @user_settings = settings
       @attempts_left = settings[:attempts]
       @code_length = settings[:code_length]
       @num_range = settings[:num_range]
       @hints_left = settings[:hints]
       @hint = ''
+      @score = 0
       @secret_code = generate_code
       @state = :playing
+      collect_statistics first: true
     end
 
     def submit guess
@@ -29,7 +35,10 @@ module CodebreakerRG
       fail(RuntimeError, 'wrong guess length') unless guess.length == @code_length
       sec_code = String.new(@secret_code)
       guess_copy = String.new(guess)
-      [plus_counts(sec_code, guess_copy), minus_counts(sec_code, guess_copy)]
+      answer = [plus_counts(sec_code, guess_copy), minus_counts(sec_code, guess_copy)]
+      check_lost
+      collect_statistics curr_submit: [guess, answer]
+      answer
     end
 
     def won?
@@ -45,35 +54,93 @@ module CodebreakerRG
       fail(RuntimeError, 'No more hints') if @hints_left == 0
       @hints_left -= 1
       @hint = @secret_code.chars.sample.to_s
+      collect_statistics
       @hint
     end
 
     def play_again
       fail(RuntimeError, 'game not started yet') if @state == :initialized
-      start user_settings: @user_settings
+      if @settings == :user_settings
+        start user_settings: @user_settings
+      else
+        start diff_level: @settings
+      end
     end
 
-    def statistic
+    def statistics all_stats: false
       return {state: 'game not started yet'} if @state == :initialized
-      {
-        attempts_left: @attempts_left,
-        code_length: @code_length,
-        num_range: @num_range,
-        hints_left: @hints_left,
-        hint: @hint,
-        secret_code: @state == :playing ? '*' * @code_length : @secret_code,
-        state: if @state == :playing
-                'playing game'
-              elsif @state == :won
-                'player win the game'
-              elsif @state == :lost
-                'player lost the game'
-              elsif @state == :initialized
-                'game not started yet'
-              else
-                ''
-              end
-      }
+      if all_stats
+        ret_stats = @statistics
+      else
+        ret_stats = [@statistics.last]
+      end
+      ret_stats.inject([]) do |res, el|
+        if el[:settings] == :user_settings
+          settings = el[:user_settings]
+        else
+          settings = DIFF_SETTINGS[el[:settings]]
+        end
+        res <<  {
+                  attempts_left: el[:attempts_left],
+                  code_length: settings[:code_length],
+                  num_range: settings[:num_range],
+                  user_settings: el[:user_settings],
+                  hints_left: el[:hints_left],
+                  hint: el[:hint],
+                  secret_code: el[:state] == :playing ? '*' * settings[:code_length] : el[:secret_code],
+                  state: if el[:state] == :playing
+                          'playing game'
+                        elsif el[:state] == :won
+                          'player win the game'
+                        elsif el[:state] == :lost
+                          'player lost the game'
+                        elsif el[:state] == :initialized
+                          'game not started yet'
+                        else
+                          ''
+                        end
+                }
+      end
+      # {
+      #   attempts_left: @attempts_left,
+      #   code_length: @code_length,
+      #   num_range: @num_range,
+      #   hints_left: @hints_left,
+      #   hint: @hint,
+      #   secret_code: @state == :playing ? '*' * @code_length : @secret_code,
+      #   state: if @state == :playing
+      #           'playing game'
+      #         elsif @state == :won
+      #           'player win the game'
+      #         elsif @state == :lost
+      #           'player lost the game'
+      #         elsif @state == :initialized
+      #           'game not started yet'
+      #         else
+      #           ''
+      #         end
+      # }
+    end
+
+    def collect_statistics first: false, curr_submit: []
+      return {state: 'game not started yet'} if @state == :initialized
+      if first
+        curr_stat = {submits: []}
+      else 
+        curr_stat = @statistics.last
+      end
+      temp_hash = {
+                    attempts_left: @attempts_left,
+                    settings: @settings,
+                    user_settings: @user_settings,
+                    hints_left: @hints_left,
+                    hint: @hint,
+                    secret_code: @secret_code,
+                    state: @state,
+                    score: @score
+                  }
+      curr_stat.merge temp_hash
+      curr_stat[:submits] << curr_submit unless curr_submit.empty?
     end
 
     private
@@ -86,7 +153,7 @@ module CodebreakerRG
 
       def plus_counts sec_code, guess
         if @sec_code == guess
-          @state = :won
+          game_win
           code_length
         else
           sec_code.chars.each_index do |i| 
@@ -111,6 +178,18 @@ module CodebreakerRG
           end
         end
         sec_code.count('-')
+      end
+
+      def game_win
+        @state = :won
+        @score = 100
+      end
+
+      def check_lost
+        if !game_win && @attempts_left == 0
+          state = :lost 
+          @score = 0
+        end
       end
 
   end
