@@ -32,7 +32,7 @@ module CodebreakerRG
 
     def submit guess
       fail(RuntimeError, 'game not started') unless @state == :playing
-      fail(RuntimeError, 'wrong guess length') unless guess.length == @code_length
+      guess_validation guess
       sec_code = String.new(@secret_code)
       guess_copy = String.new(guess)
       answer = [plus_counts(sec_code, guess_copy), minus_counts(sec_code, guess_copy)]
@@ -101,46 +101,6 @@ module CodebreakerRG
                         end
                 }
       end
-      # {
-      #   attempts_left: @attempts_left,
-      #   code_length: @code_length,
-      #   num_range: @num_range,
-      #   hints_left: @hints_left,
-      #   hint: @hint,
-      #   secret_code: @state == :playing ? '*' * @code_length : @secret_code,
-      #   state: if @state == :playing
-      #           'playing game'
-      #         elsif @state == :won
-      #           'player win the game'
-      #         elsif @state == :lost
-      #           'player lost the game'
-      #         elsif @state == :initialized
-      #           'game not started yet'
-      #         else
-      #           ''
-      #         end
-      # }
-    end
-
-    def collect_statistics first: false, curr_submit: []
-      return {state: 'game not started yet'} if @state == :initialized
-      if first
-        curr_stat = {submits: []}
-      else 
-        curr_stat = @statistics.last
-      end
-      temp_hash = {
-                    attempts_left: @attempts_left,
-                    settings: @settings,
-                    user_settings: @user_settings,
-                    hints_left: @hints_left,
-                    hint: @hint,
-                    secret_code: @secret_code,
-                    state: @state,
-                    score: @score
-                  }
-      curr_stat.merge temp_hash
-      curr_stat[:submits] << curr_submit unless curr_submit.empty?
     end
 
     private
@@ -149,6 +109,11 @@ module CodebreakerRG
         sec_code = ''
         @code_length.times{ sec_code << @num_range.to_a.sample.to_s}
         sec_code
+      end
+
+      def guess_validation guess
+        fail(RuntimeError, 'wrong guess length') unless guess.length == @code_length
+        fail(RuntimeError, "guess must contains numbers from #{@num_range.begin} to #{@num_range.end}") unless guess.match(/[#{@num_range.begin}-#{@num_range.end}]+/)
       end
 
       def plus_counts sec_code, guess
@@ -190,6 +155,27 @@ module CodebreakerRG
           state = :lost 
           @score = 0
         end
+      end
+
+      def collect_statistics first: false, curr_submit: []
+        return {state: 'game not started yet'} if @state == :initialized
+        if first
+          curr_stat = {submits: []}
+        else 
+          curr_stat = @statistics.last
+        end
+        temp_hash = {
+                      attempts_left: @attempts_left,
+                      settings: @settings,
+                      user_settings: @user_settings,
+                      hints_left: @hints_left,
+                      hint: @hint,
+                      secret_code: @secret_code,
+                      state: @state,
+                      score: @score
+                    }
+        curr_stat.merge temp_hash
+        curr_stat[:submits] << curr_submit unless curr_submit.empty?
       end
 
   end

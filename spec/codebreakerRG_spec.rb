@@ -95,6 +95,7 @@ module CodebreakerRG
           before do
             game.instance_variable_set(:@statistics, [{submits: []}])
             game.instance_variable_set(:@state, :playing)
+            game.instance_variable_set(:@num_range, (1..6))
             game.instance_variable_set(:@secret_code, sec_code)
             game.instance_variable_set(:@code_length, 4)
           end
